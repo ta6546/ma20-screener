@@ -26,9 +26,14 @@ tr:hover td{background:#1e2329}a{color:var(--text);font-weight:600;text-decorati
 .tag.s{background:#3c2f00;color:var(--acc)}.al{display:inline-block;width:10px;height:10px;border-radius:2px}
 .empty{color:var(--sub);padding:40px;text-align:center}
 @media(max-width:900px){.cond small{display:none}.cond{padding:7px 9px;margin-bottom:6px}}
+.tabs{display:flex;gap:4px;margin-left:8px}.tab{width:auto;padding:6px 12px;font-size:13px;background:transparent;color:var(--sub);border:1px solid var(--line);border-radius:6px;font-weight:600}
+.tab.on{background:var(--acc);color:#111;border-color:var(--acc)}
+.kgintro{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:6px}.kgintro p{margin:6px 0 0;color:var(--sub);font-size:12.5px}
+.memo{white-space:normal;text-align:left!important;min-width:220px;color:var(--sub);font-size:12px}
+[hidden]{display:none!important}
 </style></head><body>
-<header><h1>20선 근처 종목 검색</h1><span>바이낸스 USDT 선물 · 마감된 봉 기준 · 시세는 이 브라우저가 바이낸스에서 직접 받아요 · 실제 주문 없음</span></header>
-<main><aside>
+<header><h1>종목 검색</h1><nav class="tabs"><button class="tab on" data-t="ma">20선 근처</button><button class="tab" data-t="kg">강고양이 매매법</button></nav><span>바이낸스 USDT 선물 · 마감된 봉 기준 · 시세는 이 브라우저가 바이낸스에서 직접 받아요 · 실제 주문 없음</span></header>
+<main id="p-ma"><aside>
 <div id="conds"></div>
 <div class="opts">
 <label>상승률 순위<select id="rank"><option>5</option><option selected>10</option><option>20</option><option>30</option></select></label>
@@ -41,6 +46,19 @@ tr:hover td{background:#1e2329}a{color:var(--text);font-weight:600;text-decorati
 <div class="note">과거 승률 = 신호 다음 1시간봉에 샀을 때 48시간 안에 +5%가 −3%보다 먼저 온 비율 (본전 37.5%, 아무 종목 20선 근처 33.6%).<br>★ 표시 조건만 본전을 확실히 넘었어요. 나머지는 참고용.<br>일봉 조건은 20일 안 +15% vs −7% 기준(본전 31.8%). 100·200일선 칸은 일봉 조건을 골랐을 때만 채워져요.</div>
 </aside>
 <section><div id="status">조건을 고르고 검색을 누르세요.</div><div id="out"></div></section></main>
+<main id="p-kg" hidden><aside>
+<div class="kgintro"><b>강고양이 매매법 후보</b><p>바이낸스 하루 거래대금이 조용하다가 크게 터진(기본 300M 이상) 코인을 찾아요. 업비트·빗썸 상장 코인, 대형 코인, 원래 거래량이 큰 코인은 빼요. 매수 추천이 아니라 차트를 직접 열어 볼 후보 목록이에요.</p></div>
+<div class="opts">
+<label>폭발 기준 (하루 거래대금)<select id="kvol"><option value="200">200M</option><option value="300" selected>300M</option><option value="350">350M</option><option value="400">400M</option></select></label>
+<label>폭발을 셀 최근 일수<select id="kdays"><option>14</option><option selected>30</option><option>60</option></select></label>
+<label>최근 폭발 최소 횟수<select id="kmin"><option value="1" selected>1번 (전부)</option><option value="2">2번 (하루짜리 제외)</option><option value="4">4번 이상</option></select></label>
+<label>국내 상장 코인<select id="kkr"><option value="0" selected>제외</option><option value="1">포함</option></select></label>
+<label>원래 거래량 큰 코인<select id="kbig"><option value="0" selected>제외</option><option value="1">포함</option></select></label>
+</div>
+<button id="kgo">검색</button>
+<div class="note">기준은 kangneow 저장소 tools/screener.py와 같아요. 과거 검증: 2026-03-17 SIREN, 06-21 SYN, 09-01 AKE가 모두 목록에 잡혔어요. 같은 날 나중에 무너진 종목도 많이 섞여 있었어요.<br>지난 1년 기저율: 처음 터진 뒤 60일 안에 3배 간 비율은 하루짜리 폭발 4%, 7일 안에 4번 이상 터진 경우 12%(그중 62%는 반토막). 1배 · 한 종목 · 손절선 · 출금 원칙이 더 중요해요.</div>
+</aside>
+<section><div id="kstatus">조건을 고르고 검색을 누르세요. 전체 종목 일봉을 받느라 1분 정도 걸려요.</div><div id="kout"></div></section></main>
 <script>
 
 // ===== 검색 엔진 (종목검색.py 와 같은 계산, 브라우저에서 직접 바이낸스 호출) =====
@@ -128,4 +146,66 @@ async function go(){
  clearTimeout(timer);const m=+auto.value;if(m)timer=setTimeout(go,m*60000);
 }
 document.getElementById('go').onclick=go;
+
+// ===== 탭 =====
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));
+  document.getElementById('p-ma').hidden=b.dataset.t!=='ma';document.getElementById('p-kg').hidden=b.dataset.t!=='kg'});
+if(location.hash==='#kg')document.querySelector('.tab[data-t="kg"]').click();
+
+// ===== 강고양이 매매법 (kangneow/tools/screener.py 이식) =====
+const KSKIP=new Set(['BTC','ETH','BNB','SOL','XRP','DOGE','USDC','FDUSD','XAU','XAG','XPT','XPD','PAXG','XAUT']);
+function baseAsset(sym){let b=sym.slice(0,-4);for(const p of ['1000000','1000'])if(b.startsWith(p)&&b.length>p.length)return b.slice(p.length);return b}
+async function koreanListed(){const out=new Set();let ok=0;
+  try{const r=await fetch('https://api.upbit.com/v1/market/all');if(r.ok){(await r.json()).forEach(m=>out.add(m.market.split('-')[1]));ok++}}catch(e){}
+  for(const q of ['ALL_KRW','ALL_BTC']){try{const r=await fetch('https://api.bithumb.com/public/ticker/'+q);if(r.ok){Object.keys((await r.json()).data||{}).forEach(k=>k!=='date'&&out.add(k));ok++}}catch(e){}}
+  return {set:out,ok}}
+const median=a=>{const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2};
+const utcDay=ms=>new Date(ms).toISOString().slice(0,10);
+function kanalyze(sym,daily,h4,btcRet7,o){
+  const V=o.vol*1e6;if(daily.length<45)return null;
+  const D=daily.map(r=>utcDay(r[0])),C=daily.map(r=>r[4]),Q=daily.map(r=>r[5]),n=daily.length,w0=Math.max(0,n-60);
+  const bursts=[];for(let i=w0;i<n;i++)if(Q[i]>=V)bursts.push(i);
+  const recent=bursts.filter(i=>i>=n-o.days);if(recent.length<o.min||!bursts.length)return null;
+  const first=bursts[0],pre=Q.slice(Math.max(0,first-30),first),preMed=pre.length>=10?median(pre):null,alwaysBig=preMed===null||preMed>=V/3;
+  const base=Math.min(...C.slice(Math.max(0,first-30),first+1)),runup=base>0?C[n-1]/base:0;
+  let peak=C[first],mdd=0;for(const c of C.slice(first)){peak=Math.max(peak,c);mdd=Math.max(mdd,1-c/peak)}
+  const hiSince=Math.max(...C.slice(first)),fromHi=C[n-1]/hiSince-1,box=C.slice(-10),lo=Math.min(...box),hi=Math.max(...box);
+  const pos=hi>lo?(C[n-1]-lo)/(hi-lo):1,ret7=n>=8?C[n-1]/C[n-8]-1:0;
+  let bull4=null,hl4=null;if(h4&&h4.length>=13){const last=h4.slice(-12);bull4=last.filter(r=>r[4]>r[1]).length;hl4=last.filter((q,i)=>q[3]>h4[h4.length-13+i][3]).length}
+  const flags=[];if(alwaysBig)flags.push('원래 거래량 큰 코인');if(recent.length===1)flags.push('폭발 1번뿐');
+  if(runup>=8)flags.push(`바닥 대비 ${runup.toFixed(0)}배 · 이미 크게 오름`);if(mdd>=0.5)flags.push(`폭발 후 최대 낙폭 -${(mdd*100).toFixed(0)}%`);
+  const H=daily.map(r=>r[2]),L=daily.map(r=>r[3]),O=daily.map(r=>r[1]);let wicks=0;
+  for(let i=n-30;i<n;i++)if((H[i]-Math.max(O[i],C[i]))/C[i]>=0.25||(Math.min(O[i],C[i])-L[i])/C[i]>=0.25)wicks++;
+  if(wicks>=3)flags.push(`25% 넘는 꼬리 ${wicks}일(무빙 거침)`);if(fromHi<=-0.4)flags.push('고점 대비 -40% 이하');
+  if(btcRet7!==null&&btcRet7<-0.03&&ret7>btcRet7+0.05)flags.push('BTC 하락 중 버팀');
+  if(pos>=0.85&&C[n-1]<hiSince*0.98)flags.push('10일 박스 상단');if(C[n-1]>=hiSince*0.98)flags.push('폭발 후 최고가 부근');
+  return{symbol:sym,base:baseAsset(sym),close:C[n-1],bursts:recent.length,first:D[first],last:D[bursts[bursts.length-1]],
+    maxb:Math.max(...bursts.map(i=>Q[i]))/1e6,pre:(preMed||0)/1e6,runup,mdd,fromHi,pos,ret7,bull4,hl4,alwaysBig,flags}}
+async function kklines(sym,iv,limit){const raw=await get('/fapi/v1/klines',{symbol:sym,interval:iv,limit});return raw.map(k=>[+k[0],+k[1],+k[2],+k[3],+k[4],+k[7]])}
+async function kscan(o){const st=document.getElementById('kstatus'),t0=Date.now();
+  st.textContent='종목 목록과 국내 상장 목록 받는 중…';
+  const info=await get('/fapi/v1/exchangeInfo');
+  const syms=info.symbols.filter(s=>s.contractType==='PERPETUAL'&&s.quoteAsset==='USDT'&&s.status==='TRADING'&&(s.underlyingType||'COIN')==='COIN').map(s=>s.symbol);
+  const kr=o.kr?{set:new Set(),ok:3}:await koreanListed();
+  const cand=syms.filter(s=>!KSKIP.has(baseAsset(s))&&(o.kr||!kr.set.has(baseAsset(s))));
+  const btc=await kklines('BTCUSDT','1d',120),btcRet7=btc.length>=8?btc[btc.length-1][4]/btc[btc.length-8][4]-1:null;
+  const res=(await pool(cand,6,async s=>{try{const d=await kklines(s,'1d',120);let r=kanalyze(s,d,null,btcRet7,o);
+      if(r&&(o.big||!r.alwaysBig))r=kanalyze(s,d,await kklines(s,'4h',30),btcRet7,o);return r}catch(e){return null}},
+    d=>{st.textContent=`일봉 받는 중… ${d}/${cand.length}`})).filter(r=>r&&(o.big||!r.alwaysBig));
+  res.sort((a,b)=>a.last<b.last?1:a.last>b.last?-1:b.bursts-a.bursts);
+  return{res,btcRet7,n:cand.length,krWarn:!o.kr&&kr.ok<3,secs:((Date.now()-t0)/1000).toFixed(0)}}
+function krender(j){const out=document.getElementById('kout');
+  if(!j.res.length){out.innerHTML='<div class="empty">기준에 맞는 종목이 없어요. 쉬는 때일 수 있어요.</div>';return}
+  const pc=v=>(v>0?'+':'')+(v*100).toFixed(0)+'%';
+  let h='<table><thead><tr><th>종목</th><th>메모</th><th>최근 폭발</th><th>첫 폭발</th><th>마지막 폭발</th><th>최대(M)</th><th>폭발 전 중간값(M)</th><th>바닥 대비</th><th>고점 대비</th><th>10일 박스</th><th>7일</th><th>4h 양봉/12</th><th>4h 저점상승/12</th></tr></thead><tbody>';
+  for(const r of j.res)h+=`<tr><td><a href="https://www.binance.com/ko/futures/${r.symbol}" target="_blank">${r.base}</a></td><td class="memo">${r.flags.join(' · ')}</td><td>${r.bursts}회</td><td>${r.first.slice(5)}</td><td>${r.last.slice(5)}</td>
+   <td>${r.maxb.toLocaleString(undefined,{maximumFractionDigits:0})}</td><td>${r.pre.toFixed(0)}</td><td>${r.runup.toFixed(1)}배</td><td class="${r.fromHi>=0?'up':'dn'}">${pc(r.fromHi)}</td>
+   <td>${(r.pos*100).toFixed(0)}%</td><td class="${r.ret7>=0?'up':'dn'}">${pc(r.ret7)}</td><td>${r.bull4??'-'}</td><td>${r.hl4??'-'}</td></tr>`;
+  out.innerHTML=h+'</tbody></table>'}
+document.getElementById('kgo').onclick=async()=>{const b=document.getElementById('kgo'),st=document.getElementById('kstatus');b.disabled=true;b.textContent='검색 중…';
+  try{const j=await kscan({vol:+kvol.value,days:+kdays.value,min:+kmin.value,kr:kkr.value==='1',big:kbig.value==='1'});krender(j);
+    st.textContent=`${new Date().toTimeString().slice(0,8)} 기준 · ${j.n}종목 검사 · ${j.res.length}개 · BTC 7일 ${j.btcRet7==null?'-':(j.btcRet7*100).toFixed(1)+'%'} · ${j.secs}초`+(j.krWarn?' · 주의: 업비트·빗썸 목록을 일부 못 받아서 국내 상장 코인이 섞였을 수 있어요':'')}
+  catch(e){st.textContent='오류: '+e.message+' — 바이낸스가 막힌 지역/네트워크(미국 IP, 일부 VPN)에서는 안 돼요.'}
+  b.disabled=false;b.textContent='검색'};
+
 </script></body></html>
