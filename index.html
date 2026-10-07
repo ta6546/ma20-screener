@@ -1,0 +1,131 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>20선 종목 검색</title><style>
+:root{--bg:#0b0e11;--panel:#161a1e;--line:#2b3139;--text:#eaecef;--sub:#848e9c;--up:#0ecb81;--dn:#f6465d;--acc:#f0b90b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,"Malgun Gothic",sans-serif}
+header{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+h1{font-size:18px;margin:0}header span{color:var(--sub);font-size:12px}
+main{display:grid;grid-template-columns:340px 1fr;gap:0;min-height:calc(100vh - 52px)}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+aside{background:var(--panel);border-right:1px solid var(--line);padding:14px 16px}
+.cond{display:block;padding:9px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;cursor:pointer}
+.cond:hover{border-color:#474d57}.cond input{margin-right:6px;accent-color:var(--acc)}
+.cond b{font-size:13.5px}.cond.star b::after{content:" ★";color:var(--acc)}
+.cond small{display:block;color:var(--sub);font-size:11.5px;margin:3px 0 0 22px}
+.cond .wr{display:block;margin:3px 0 0 22px;font-size:11.5px;color:var(--up)}
+.cond.weak .wr{color:var(--sub)}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}
+.opts label{font-size:12px;color:var(--sub)}.opts select,.opts input{width:100%;margin-top:3px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px}
+button{width:100%;padding:11px;border:0;border-radius:8px;background:var(--acc);color:#111;font-weight:700;font-size:15px;cursor:pointer}
+button:disabled{opacity:.5}.note{color:var(--sub);font-size:11.5px;margin-top:10px}
+section{padding:14px 18px;overflow:auto}#status{color:var(--sub);font-size:12.5px;margin-bottom:8px}
+table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}
+th{position:sticky;top:0;background:var(--bg);color:var(--sub);font-weight:500;text-align:right;padding:7px 8px;border-bottom:1px solid var(--line);cursor:pointer}
+th:first-child,td:first-child{text-align:left}td{padding:7px 8px;border-bottom:1px solid #1e2329;text-align:right}
+tr:hover td{background:#1e2329}a{color:var(--text);font-weight:600;text-decoration:none}a:hover{color:var(--acc)}
+.up{color:var(--up)}.dn{color:var(--dn)}.tag{display:inline-block;padding:1px 6px;border-radius:4px;background:#2b3139;margin-left:3px;font-size:11px}
+.tag.s{background:#3c2f00;color:var(--acc)}.al{display:inline-block;width:10px;height:10px;border-radius:2px}
+.empty{color:var(--sub);padding:40px;text-align:center}
+@media(max-width:900px){.cond small{display:none}.cond{padding:7px 9px;margin-bottom:6px}}
+</style></head><body>
+<header><h1>20선 근처 종목 검색</h1><span>바이낸스 USDT 선물 · 마감된 봉 기준 · 시세는 이 브라우저가 바이낸스에서 직접 받아요 · 실제 주문 없음</span></header>
+<main><aside>
+<div id="conds"></div>
+<div class="opts">
+<label>상승률 순위<select id="rank"><option>5</option><option selected>10</option><option>20</option><option>30</option></select></label>
+<label>20선 거리 ±%<select id="near"><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select></label>
+<label>일봉 100·200일선 거리 ±%<select id="neard"><option>2</option><option selected>3</option><option>5</option></select></label>
+<label>최소 24h 거래대금<select id="minqv"><option value="5000000">500만$</option><option value="10000000" selected>1천만$</option><option value="20000000">2천만$</option><option value="50000000">5천만$</option></select></label>
+<label>자동 새로고침<select id="auto"><option value="0">끔</option><option value="5">5분</option><option value="15" selected>15분</option><option value="60">1시간</option></select></label>
+</div>
+<button id="go">검색</button>
+<div class="note">과거 승률 = 신호 다음 1시간봉에 샀을 때 48시간 안에 +5%가 −3%보다 먼저 온 비율 (본전 37.5%, 아무 종목 20선 근처 33.6%).<br>★ 표시 조건만 본전을 확실히 넘었어요. 나머지는 참고용.<br>일봉 조건은 20일 안 +15% vs −7% 기준(본전 31.8%). 100·200일선 칸은 일봉 조건을 골랐을 때만 채워져요.</div>
+</aside>
+<section><div id="status">조건을 고르고 검색을 누르세요.</div><div id="out"></div></section></main>
+<script>
+
+// ===== 검색 엔진 (종목검색.py 와 같은 계산, 브라우저에서 직접 바이낸스 호출) =====
+const BASE='https://fapi.binance.com';
+const EXCLUDE=new Set(['BTCUSDT','ETHUSDT','USDCUSDT','BTCDOMUSDT']);
+const CACHE=new Map();
+async function get(path,params={}){
+  const url=BASE+path+(Object.keys(params).length?'?'+new URLSearchParams(params):'');
+  for(let i=0;i<3;i++){try{const r=await fetch(url);if(r.ok)return await r.json();if(r.status===418||r.status===429)await new Promise(z=>setTimeout(z,5000*(i+1)));}
+   catch(e){if(i===2)throw new Error('바이낸스 접속 실패 ('+path+')');await new Promise(z=>setTimeout(z,1000*(i+1)))}}
+  throw new Error('바이낸스 응답 오류 ('+path+')');
+}
+async function klines(sym,iv,limit){const raw=await get('/fapi/v1/klines',{symbol:sym,interval:iv,limit});const now=Date.now();
+  return raw.filter(k=>k[6]<now).map(k=>[+k[1],+k[2],+k[3],+k[4],+k[7]])}
+async function tickers(){const info=await get('/fapi/v1/exchangeInfo');
+  const ok=new Set(info.symbols.filter(s=>s.contractType==='PERPETUAL'&&s.quoteAsset==='USDT'&&s.status==='TRADING').map(s=>s.symbol));
+  return (await get('/fapi/v1/ticker/24hr')).filter(t=>ok.has(t.symbol)&&!EXCLUDE.has(t.symbol))}
+const sma=(x,n,e=x.length)=>e>=n?x.slice(e-n,e).reduce((a,b)=>a+b,0)/n:null;
+const sd=(x,n,e=x.length)=>{if(e<n)return null;const w=x.slice(e-n,e),m=w.reduce((a,b)=>a+b,0)/n;return Math.sqrt(w.reduce((a,v)=>a+(v-m)**2,0)/n)};
+function align(c,e=c.length){if(e<20)return 0;const a=sma(c,5,e),b=sma(c,10,e),d=sma(c,20,e);if(a>b&&b>d&&c[e-1]>d)return 1;if(a<b&&b<d&&c[e-1]<d)return -1;return 0}
+function features(h1,h4){const c=h1.map(k=>k[3]),qv=h1.map(k=>k[4]),n=c.length;if(n<60||h4.length<21)return null;
+  const m20=sma(c,20),m20_5=sma(c,20,n-5),c4=h4.map(k=>k[3]),m20_4=sma(c4,20);
+  const base=e=>e>=30?qv.slice(e-30,e).reduce((a,b)=>a+b,0)/30:null;
+  const vr=c.map((_,i)=>base(i)?qv[i]/base(i):0);const v3b=base(n-3);
+  const bbw=[];for(let e=20;e<=n;e++)bbw.push(4*sd(c,20,e)/sma(c,20,e));
+  const recent=bbw.slice(-200);const q20=recent.length>=50?[...recent].sort((a,b)=>a-b)[Math.floor(recent.length*0.2)]:null;
+  const hi7=Math.max(...c.slice(-168));
+  return {close:c[n-1],d1:(c[n-1]/m20-1)*100,d4:(c[n-1]/m20_4-1)*100,st1:align(c),st4:align(c4),
+    v3:v3b?(qv.slice(-3).reduce((a,b)=>a+b,0)/3)/v3b:0,vmax72:Math.max(...vr.slice(-72)),slope:(m20/m20_5-1)*100,
+    squeeze:q20!==null&&bbw[bbw.length-1]<=q20,dd7:(c[n-1]/hi7-1)*100}}
+function featuresDaily(d1){const c=d1.map(k=>k[3]),qv=d1.map(k=>k[4]);if(c.length<201)return{g100:null,g200:null,brk:false};
+  const n=c.length,m100=sma(c,100),m200=sma(c,200),p100=sma(c,100,n-1),p200=sma(c,200,n-1),top=Math.max(m100,m200),ptop=Math.max(p100,p200);
+  const vrd=qv[n-1]/(qv.slice(-21,-1).reduce((a,b)=>a+b,0)/20);
+  return{g100:(c[n-1]/m100-1)*100,g200:(c[n-1]/m200-1)*100,brk:Math.abs(m100/m200-1)<=0.05&&c[n-1]>top&&c[n-2]<=ptop&&vrd>=2}}
+function match(f,rank,o){const near1=Math.abs(f.d1)<=o.near,near4=Math.abs(f.d4)<=o.near*2,top=rank<=o.rank;
+  return{E1:near1&&top,E4:near4&&top,FE:near1&&f.dd7<=-25&&f.d1>0&&top,F:near1&&f.dd7<=-25&&f.d1>0,A:near1&&f.vmax72>=5,
+   B:near1&&f.v3>=1.5&&f.slope>0&&f.d1>0,D:near1&&f.st4===1,C:near1&&f.squeeze&&f.slope>=0,
+   G1:f.g100!=null&&Math.abs(f.g100)<=o.neard,G2:f.g200!=null&&Math.abs(f.g200)<=o.neard,G3:!!f.brk}}
+async function pool(items,n,fn,onDone){let i=0,done=0;const out=new Array(items.length);
+  await Promise.all(Array.from({length:n},async()=>{while(i<items.length){const k=i++;out[k]=await fn(items[k]);onDone(++done)}}));return out}
+async function scan(o){const t0=Date.now();
+  let tk=(await tickers()).filter(t=>+t.quoteVolume>=o.minqv);tk.sort((a,b)=>+b.priceChangePercent-+a.priceChangePercent);
+  const rank=Object.fromEntries(tk.map((t,i)=>[t.symbol,i+1]));
+  const needAll=o.conds.some(k=>['F','A','B','D','C','G1','G2','G3'].includes(k)),needD=o.conds.some(k=>['G1','G2','G3'].includes(k));
+  const syms=(needAll?tk:tk.slice(0,o.rank)).map(t=>t.symbol);
+  const F=await pool(syms,6,async s=>{const key=s+needD,h=CACHE.get(key);if(h&&Date.now()-h[0]<60000)return h[1];
+    let f=null;try{f=features(await klines(s,'1h',230),await klines(s,'4h',30));if(f&&needD)Object.assign(f,featuresDaily(await klines(s,'1d',210)))}catch(e){}
+    CACHE.set(key,[Date.now(),f]);return f},d=>{document.getElementById('status').textContent=`시세 받는 중… ${d}/${syms.length}`});
+  const chg=Object.fromEntries(tk.map(t=>[t.symbol,+t.priceChangePercent])),qv=Object.fromEntries(tk.map(t=>[t.symbol,+t.quoteVolume]));
+  const rows=[];syms.forEach((s,i)=>{const f=F[i];if(!f)return;const m=match(f,rank[s],o);const hits=o.conds.filter(k=>m[k]);
+    if(hits.length){const{squeeze,brk,...rest}=f;rows.push({sym:s,rank:rank[s],chg:chg[s],qv:qv[s],hits,...rest})}});
+  rows.sort((a,b)=>b.hits.length-a.hits.length||a.rank-b.rank);
+  return{rows,scanned:syms.length,universe:tk.length,secs:((Date.now()-t0)/1000).toFixed(1),at:new Date().toTimeString().slice(0,8)}}
+
+const CONDS=[["E1", "1h 눌림", "상승률 상위 + 1시간봉 20선 눌림", "24h 상승률 상위 N위 & 1h 종가가 1h 20선 ±거리 이내", "5위 48% · 10위 46% · 20위 43%", "5위 27% · 20위 14%", true], ["E4", "4h 눌림", "상승률 상위 + 4시간봉 20선 눌림", "24h 상승률 상위 N위 & 1h 종가가 4h 20선 ±(거리x2) 이내", "20위 46.5%", "13%", true], ["FE", "급락회복+상위", "급락 후 회복 + 상승률 상위", "7일 고점 대비 -25%↓ & 1h 20선 위 회복 & 상승률 상위 N위", "48% (신호 적음)", "32%", true], ["F", "급락회복", "급락 후 1시간봉 20선 회복", "7일 고점 대비 -25%↓ & 1h 종가가 20선 근처에서 20선 위", "36%", "22%", false], ["A", "거래량폭발", "최근 거래량 폭발 후 20선 근처", "72시간 안에 1h 거래대금 평소 5배↑ 터진 적 있음", "34%", "9%", false], ["B", "출발조짐", "출발 조짐", "최근 3봉 거래대금 1.5배↑ & 20선 상승 중 & 종가 > 20선", "35%", "8%", false], ["D", "4h정배열", "4시간봉 정배열 + 1시간봉 20선 눌림", "4h 5>10>20 정배열 & 1h 20선 근처", "34%", "8%", false], ["G1", "100일선", "일봉 100일선 부근", "일봉 종가가 100일선 ±(일봉 거리) 이내", "31% (기준 31%, 별 차이 없음)", "(일봉 조건: 20일 안 +15% vs −7%)", false], ["G2", "200일선", "일봉 200일선 부근", "일봉 종가가 200일선 ±(일봉 거리) 이내", "29% (기준 31%)", "(일봉 조건: 20일 안 +15% vs −7%)", false], ["G3", "장기선돌파", "장기선 수렴 + 거래량 돌파", "100·200일선 차이 5% 이내 & 오늘 둘 다 위로 돌파 & 일봉 거래대금 2배↑", "28%, BTC 강세 땐 10일 평균 +3.5% (가끔 크게 감)", "(일봉 조건: 20일 안 +15% vs −7%)", false], ["C", "수렴", "수렴 (볼린저 폭 좁음)", "1h 볼린저 폭이 최근 200봉 중 하위 20% & 20선 평평~상승", "33%", "4%", false]];
+const box=document.getElementById('conds');
+CONDS.forEach(([k,sn,n,d,wr,b10,star])=>{const l=document.createElement('label');l.className='cond'+(star?' star':' weak');
+l.innerHTML=`<input type="checkbox" value="${k}" ${star&&k!=='FE'?'checked':''}><b>${n}</b><small>${d}</small><span class="wr">과거 승률 ${wr} · ${b10.startsWith('(')?b10:'24h 내 +10% '+b10}</span>`;box.appendChild(l)});
+const name=Object.fromEntries(CONDS.map(c=>[c[0],c[1]]));
+let rows=[],sortKey='hits',sortDir=1,timer=null;
+const f=(v,d=1)=>(v>0?'+':'')+v.toFixed(d);
+const al=v=>`<span class="al" style="background:${v>0?'#0ecb81':v<0?'#f6465d':'#8e44ad'}" title="${v>0?'정배열':v<0?'역배열':'꼬임'}"></span>`;
+const money=v=>v>=1e9?(v/1e9).toFixed(1)+'B':(v/1e6).toFixed(0)+'M';
+const COLS=[['sym','종목'],['hits','해당 조건'],['rank','순위'],['chg','24h%'],['close','가격'],['d1','1h 20선 거리'],['d4','4h 20선 거리'],['st1','1h'],['st4','4h'],['v3','거래량(최근)'],['vmax72','3일 최대 거래량'],['dd7','7일 고점 대비'],['g100','100일선'],['g200','200일선'],['qv','거래대금']];
+function render(){
+ if(!rows.length){document.getElementById('out').innerHTML='<div class="empty">조건에 맞는 종목이 없어요.</div>';return}
+ const r=[...rows].sort((a,b)=>{let x=a[sortKey]??-1e9,y=b[sortKey]??-1e9;if(sortKey==='hits'){x=-a.hits.length*1000+a.rank;y=-b.hits.length*1000+b.rank}else if(sortKey==='sym'){return sortDir*x.localeCompare(y)}return sortDir*(x-y)});
+ let h='<table><thead><tr>'+COLS.map(([k,t])=>`<th data-k="${k}">${t}</th>`).join('')+'</tr></thead><tbody>';
+ for(const x of r){h+=`<tr><td><a href="https://www.binance.com/ko/futures/${x.sym}" target="_blank">${x.sym.replace('USDT','')}</a></td><td style="text-align:left">${x.hits.map(k=>`<span class="tag ${['E1','E4','FE'].includes(k)?'s':''}">${name[k]}</span>`).join('')}</td><td>${x.rank}</td>
+ <td class="${x.chg>=0?'up':'dn'}">${f(x.chg)}%</td><td>${+x.close.toPrecision(5)}</td><td class="${x.d1>=0?'up':'dn'}">${f(x.d1,2)}%</td><td class="${x.d4>=0?'up':'dn'}">${f(x.d4,2)}%</td>
+ <td>${al(x.st1)}</td><td>${al(x.st4)}</td><td>${x.v3.toFixed(1)}배</td><td>${x.vmax72.toFixed(1)}배</td><td class="dn">${x.dd7.toFixed(0)}%</td><td>${x.g100==null?'-':f(x.g100)+'%'}</td><td>${x.g200==null?'-':f(x.g200)+'%'}</td><td>${money(x.qv)}</td>
+ </tr>`}
+ document.getElementById('out').innerHTML=h+'</tbody></table>';
+ document.querySelectorAll('th').forEach(th=>th.onclick=()=>{const k=th.dataset.k;sortDir=(sortKey===k)?-sortDir:(k==='sym'||k==='rank'||k==='hits'?1:-1);sortKey=k;render()});
+}
+async function go(){
+ const conds=[...document.querySelectorAll('#conds input:checked')].map(i=>i.value);
+ if(!conds.length){document.getElementById('status').textContent='조건을 하나 이상 고르세요.';return}
+  const b=document.getElementById('go');b.disabled=true;b.textContent='검색 중…';
+ document.getElementById('status').textContent='시세 받는 중… (전체 종목 조건을 고르면 30초 정도 걸려요)';
+ try{const j=await scan({conds,rank:+rank.value,near:+near.value,neard:+neard.value,minqv:+minqv.value});rows=j.rows;if(innerWidth<900)document.querySelector('section').scrollIntoView({behavior:'smooth'});
+  document.getElementById('status').textContent=`${j.at} 기준 · ${j.universe}종목 중 ${j.scanned}개 검사 · ${rows.length}개 발견 · ${j.secs}초`;render()}
+ catch(e){document.getElementById('status').textContent='오류: '+e.message+' — 바이낸스가 막힌 지역/네트워크(미국 IP, 일부 VPN)에서는 안 돼요.'}
+ b.disabled=false;b.textContent='검색';
+ clearTimeout(timer);const m=+auto.value;if(m)timer=setTimeout(go,m*60000);
+}
+document.getElementById('go').onclick=go;
+</script></body></html>
