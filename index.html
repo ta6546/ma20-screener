@@ -53,9 +53,14 @@ tr:hover td{background:#1e2329}a{color:var(--text);font-weight:600;text-decorati
 <label>폭발을 셀 최근 일수<select id="kdays"><option>14</option><option selected>30</option><option>60</option></select></label>
 <label>최근 폭발 최소 횟수<select id="kmin"><option value="1" selected>1번 (전부)</option><option value="2">2번 (하루짜리 제외)</option><option value="4">4번 이상</option></select></label>
 <label>국내 상장 코인<select id="kkr"><option value="0" selected>제외</option><option value="1">포함</option></select></label>
+<label>보기<select id="kview"><option value="strong" selected>강한 것만 (추천)</option><option value="all">전부</option><option value="calm">얌전한 것만</option></select></label>
 <label>원래 거래량 큰 코인<select id="kbig"><option value="0" selected>제외</option><option value="1">포함</option></select></label>
 </div>
 <button id="kgo">검색</button>
+<div class="note"><b>보기 기준</b> (국내 미상장, 2025-01~2026-07 목록 836건의 이후 60일 검증)<br>
+· <b>강한 것만</b> = 폭발 후 최고가 부근 또는 BTC 하락 중 버팀: 3배 간 비율 <b>19%</b> (전체 10%), 반토막 49% (전체 43%). 2025·2026 모두 2배 차이.<br>
+· <b>얌전한 것만</b> = 폭발 2번↑, 바닥 대비 8배 미만, 폭발 후 낙폭 50% 미만, 거친 꼬리 없음, 고점 대비 -40% 초과: 3배 8%, 반토막 41%. 위험은 거의 같고 기회만 줄었어요.<br>
+· 국내 상장 코인은 3배 3% (미상장 10%).<br></div>
 <div class="note">기준은 kangneow 저장소 tools/screener.py와 같아요. 과거 검증: 2026-03-17 SIREN, 06-21 SYN, 09-01 AKE가 모두 목록에 잡혔어요. 같은 날 나중에 무너진 종목도 많이 섞여 있었어요.<br>지난 1년 기저율: 처음 터진 뒤 60일 안에 3배 간 비율은 하루짜리 폭발 4%, 7일 안에 4번 이상 터진 경우 12%(그중 62%는 반토막). 1배 · 한 종목 · 손절선 · 출금 원칙이 더 중요해요.</div>
 </aside>
 <section><div id="kstatus">조건을 고르고 검색을 누르세요. 전체 종목 일봉을 받느라 1분 정도 걸려요.</div><div id="kout"></div></section></main>
@@ -194,17 +199,22 @@ async function kscan(o){const st=document.getElementById('kstatus'),t0=Date.now(
     d=>{st.textContent=`일봉 받는 중… ${d}/${cand.length}`})).filter(r=>r&&(o.big||!r.alwaysBig));
   res.sort((a,b)=>a.last<b.last?1:a.last>b.last?-1:b.bursts-a.bursts);
   return{res,btcRet7,n:cand.length,krWarn:!o.kr&&kr.ok<3,secs:((Date.now()-t0)/1000).toFixed(0)}}
-function krender(j){const out=document.getElementById('kout');
-  if(!j.res.length){out.innerHTML='<div class="empty">기준에 맞는 종목이 없어요. 쉬는 때일 수 있어요.</div>';return}
+const kStrong=r=>r.flags.some(f=>f.includes('최고가 부근')||f.includes('버팀'));
+const kCalm=r=>r.bursts>=2&&r.runup<8&&r.mdd<0.5&&!r.flags.some(f=>f.includes('꼬리'))&&r.fromHi>-0.4;
+let KJ=null;
+function krender(j){KJ=j;const out=document.getElementById('kout');const v=document.getElementById('kview').value;
+  j={...j,res:j.res.filter(r=>v==='all'||(v==='strong'?kStrong(r):kCalm(r)))};
+  if(!j.res.length){out.innerHTML=`<div class="empty">이 보기에 맞는 종목이 없어요${v!=='all'?` (전체 ${KJ.res.length}개)`:''}. 쉬는 때일 수 있어요.</div>`;return}
   const pc=v=>(v>0?'+':'')+(v*100).toFixed(0)+'%';
   let h='<table><thead><tr><th>종목</th><th>메모</th><th>최근 폭발</th><th>첫 폭발</th><th>마지막 폭발</th><th>최대(M)</th><th>폭발 전 중간값(M)</th><th>바닥 대비</th><th>고점 대비</th><th>10일 박스</th><th>7일</th><th>4h 양봉/12</th><th>4h 저점상승/12</th></tr></thead><tbody>';
-  for(const r of j.res)h+=`<tr><td><a href="https://www.binance.com/ko/futures/${r.symbol}" target="_blank">${r.base}</a></td><td class="memo">${r.flags.join(' · ')}</td><td>${r.bursts}회</td><td>${r.first.slice(5)}</td><td>${r.last.slice(5)}</td>
+  for(const r of j.res)h+=`<tr><td><a href="https://www.binance.com/ko/futures/${r.symbol}" target="_blank">${r.base}</a>${kStrong(r)?' <span class="tag s">강함</span>':''}</td><td class="memo">${r.flags.join(' · ')}</td><td>${r.bursts}회</td><td>${r.first.slice(5)}</td><td>${r.last.slice(5)}</td>
    <td>${r.maxb.toLocaleString(undefined,{maximumFractionDigits:0})}</td><td>${r.pre.toFixed(0)}</td><td>${r.runup.toFixed(1)}배</td><td class="${r.fromHi>=0?'up':'dn'}">${pc(r.fromHi)}</td>
    <td>${(r.pos*100).toFixed(0)}%</td><td class="${r.ret7>=0?'up':'dn'}">${pc(r.ret7)}</td><td>${r.bull4??'-'}</td><td>${r.hl4??'-'}</td></tr>`;
   out.innerHTML=h+'</tbody></table>'}
+document.getElementById('kview').onchange=()=>KJ&&krender(KJ);
 document.getElementById('kgo').onclick=async()=>{const b=document.getElementById('kgo'),st=document.getElementById('kstatus');b.disabled=true;b.textContent='검색 중…';
   try{const j=await kscan({vol:+kvol.value,days:+kdays.value,min:+kmin.value,kr:kkr.value==='1',big:kbig.value==='1'});krender(j);
-    st.textContent=`${new Date().toTimeString().slice(0,8)} 기준 · ${j.n}종목 검사 · ${j.res.length}개 · BTC 7일 ${j.btcRet7==null?'-':(j.btcRet7*100).toFixed(1)+'%'} · ${j.secs}초`+(j.krWarn?' · 주의: 업비트·빗썸 목록을 일부 못 받아서 국내 상장 코인이 섞였을 수 있어요':'')}
+    st.textContent=`${new Date().toTimeString().slice(0,8)} 기준 · ${j.n}종목 검사 · 전체 ${j.res.length}개 (강한 것 ${j.res.filter(kStrong).length}개) · BTC 7일 ${j.btcRet7==null?'-':(j.btcRet7*100).toFixed(1)+'%'} · ${j.secs}초`+(j.krWarn?' · 주의: 업비트·빗썸 목록을 일부 못 받아서 국내 상장 코인이 섞였을 수 있어요':'')}
   catch(e){st.textContent='오류: '+e.message+' — 바이낸스가 막힌 지역/네트워크(미국 IP, 일부 VPN)에서는 안 돼요.'}
   b.disabled=false;b.textContent='검색'};
 
