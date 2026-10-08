@@ -190,7 +190,7 @@ async function kklines(sym,iv,limit){const raw=await get('/fapi/v1/klines',{symb
 async function kscan(o){const st=document.getElementById('kstatus'),t0=Date.now();
   st.textContent='종목 목록과 국내 상장 목록 받는 중…';
   const info=await get('/fapi/v1/exchangeInfo');
-  const syms=info.symbols.filter(s=>s.contractType==='PERPETUAL'&&s.quoteAsset==='USDT'&&s.status==='TRADING'&&(s.underlyingType||'COIN')==='COIN').map(s=>s.symbol);
+  const syms=info.symbols.filter(s=>s.contractType==='PERPETUAL'&&s.quoteAsset==='USDT'&&s.status==='TRADING'&&['COIN','PREMARKET'].includes(s.underlyingType||'COIN')).map(s=>s.symbol);
   const kr=o.kr?{set:new Set(),ok:3}:await koreanListed();
   const cand=syms.filter(s=>!KSKIP.has(baseAsset(s))&&(o.kr||!kr.set.has(baseAsset(s))));
   const btc=await kklines('BTCUSDT','1d',120),btcRet7=btc.length>=8?btc[btc.length-1][4]/btc[btc.length-8][4]-1:null;
